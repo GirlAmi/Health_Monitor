@@ -21,13 +21,13 @@
 #define KEYWORD3    0x21	// ASCII ! 0x21 for alarm
 #define FEEDBACK	0x4B	// ASCII K 0x4B
 #define BPMADDRESS	0x31	// ASCII 1 0x31
-#define tempADDRESS 0x32	// ASCII 2 0x32
-#define BP1ADDRESS  0x33	// ASCII 3 0x33
-#define BP2ADDRESS  0x34	// ASCII 4 0x34
+#define tempADDRESS 0x54	// ASCII T 0x54
+#define BP1ADDRESS  0x42	// ASCII B 0x42
+#define BP2ADDRESS  0x62	// ASCII b 0x62
 #define testADDRESS  0x30	// ASCII 0 0x30
 
 /*---- Function prototype section ------*/
-void Dec_Hex (int, int[]);
+void Dec_Hex (int, char[]);
 void Lookup (char[], int);
 void USART (void);
 void TX (char);
@@ -86,11 +86,12 @@ int main(void)
 			/* LCD temp Display */
 			i2c_start(0x50);					// Comm with LCD address
 			_delay_ms(40);
+			LCD_1line(); 
 			end= 0x3E;
 			Lookup (BPMD, end);
 			i2c_write(LCD[2]);
-			i2c_write(LCD[1]);					
-			i2c_write(LCD[0]);				
+			i2c_write(LCD[1]); 					
+			i2c_write(LCD[0]);
 			i2c_stop();
 			
 			if ((110<BPM) | (BPM>60))
@@ -100,9 +101,8 @@ int main(void)
 				_delay_ms(40);
 			}
 			
-		}
 		/* Temperature *******************************************************/
-		else if (adr== tempADDRESS)
+		} else if (adr== tempADDRESS)
 		{
 			temp= Checksum_Check(adr); 
 			
@@ -117,8 +117,8 @@ int main(void)
 			end= 0x3E;
 			Lookup (TempD, end);
 			i2c_write(LCD[2]);
-			i2c_write(LCD[1]);
-			i2c_write(LCD[0]);
+			i2c_write(LCD[1]);					// ASCII equiv. of BPM 10
+			i2c_write(LCD[0]);					// ASCII equiv. of BPM 1
 			i2c_stop();
 			
 			if ((38<BPM) | (BPM<36))
@@ -127,9 +127,8 @@ int main(void)
 				Packet_Alarm(temp, tempADDRESS);
 				_delay_ms(40);
 			}
-		}
 		/* Temperature *******************************************************/
-		else if (adr== BP1ADDRESS)
+		} else if (adr== BP1ADDRESS)
 		{
 			BP1= Checksum_Check(adr); 
 			
@@ -143,14 +142,13 @@ int main(void)
 			LCD_3line();
 			end= 0x3E;
 			Lookup (BloodPD1, end);
-			i2c_write(LCD[2]);
-			i2c_write(LCD[1]);
+			i2c_write(LCD[2]); 
+			i2c_write(LCD[1]); 
 			i2c_write(LCD[0]);
 			i2c_stop();
 			
-		}
 		/* Temperature *******************************************************/
-		else if (adr== BP2ADDRESS)
+		}	else if (adr== BP2ADDRESS)
 		{
 			BP2= Checksum_Check(adr); 
 			
@@ -164,9 +162,9 @@ int main(void)
 			LCD_4line ();
 			end= 0x3E;
 			Lookup (BloodPD2, end);
-			i2c_write(LCD[2]);
+			i2c_write(LCD[2]); 
 			i2c_write(LCD[1]);
-			i2c_write(LCD[0]);
+			i2c_write(LCD[0]); 
 			i2c_stop();
 		}
 		/* Test *******************************************************/
@@ -179,11 +177,12 @@ int main(void)
 //                FUNCTIONS
 //********************************************** 
 //********************************************** Decimal to Hexadecimal Conversion
-void Dec_Hex(int DEC, int HEX[])
+void Dec_Hex(int DEC, char HEX[])
 {
 	HEX[2]= DEC/100;						
-	HEX[1]= (DEC - (HEX[2]*100))/10;
+	HEX[1]= (DEC - (HEX[2]*100))/10;	
 	HEX[0]= DEC - ((HEX[2]*100) + (HEX[1]*10));
+	
 	HEX[2]+= 48;
 	HEX[1]+= 48;
 	HEX[0]+= 48;

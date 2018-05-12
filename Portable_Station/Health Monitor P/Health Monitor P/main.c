@@ -28,9 +28,9 @@
 #define KEYWORD2    0x35	// ASCII 5 0x35 for home TX
 #define FEEDBACK	0x4B	// ASCII K 0x4B
 #define BPMADDRESS	0x31	// ASCII 1 0x31
-#define tempADDRESS 0x32	// ASCII 2 0x32
-#define BP1ADDRESS  0x33	// ASCII 3 0x33
-#define BP2ADDRESS  0x34	// ASCII 4 0x34
+#define tempADDRESS 0x54	// ASCII T 0x54
+#define BP1ADDRESS  0x42	// ASCII B 0x42
+#define BP2ADDRESS  0x62	// ASCII b 0x62
 
 /*---- Function prototype section ------*/
 uint16_t ADC_read(uint8_t adcx);
@@ -82,7 +82,7 @@ int main(void)
 	int BP2= 0;
 	int packet_cnt=0; 
 	 
-	//helloworld    
+	
 	/* LCD Title Display */
 	i2c_start(0x50);				// Comm with LCD address
 	_delay_ms(400);
@@ -167,14 +167,10 @@ int main(void)
 		//	packet_cnt=0; 
 									
 		/* Temperature Sensor *************************************************/
-		//''temp = ADC_read(ADC_PIN1);			//Check temperature
+		temp = ADC_read(ADC_PIN1);			//Check temperature
 		temp = (temp -102)/2;
-		
-		temp++; 
-		if (temp == 45)
-		temp=0;
-	
-		
+		temp=37;
+
 		/* Convert Decimal to hex for LCD */
 		LCD[3]=0;
 		Dec_Hex(temp, LCD);
