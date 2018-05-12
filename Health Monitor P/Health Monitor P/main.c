@@ -82,7 +82,7 @@ int main(void)
 	int BP2= 0;
 	int packet_cnt=0; 
 	 
-	
+	//helloworld    
 	/* LCD Title Display */
 	i2c_start(0x50);				// Comm with LCD address
 	_delay_ms(400);
