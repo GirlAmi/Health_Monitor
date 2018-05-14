@@ -27,7 +27,7 @@
 #define testADDRESS  0x30	// ASCII 0 0x30
 
 /*---- Function prototype section ------*/
-void Dec_Hex (int, char[]);
+void Dec_Hex (char, char[]);
 void Lookup (char[], int);
 void USART (void);
 void TX (char);
@@ -44,11 +44,11 @@ void Packet_feedback (void);
 void Packet_Alarm (char, char );
 void Intro(void);
 
-char BPMD[] = {"Heart Rate(BPM) >"};
-char TempD[] = {"Body Temp (C)   >"};
+char BPMD[] =		{"Heart Rate(BPM) >"};
+char TempD[] =		{"Body Temp (C)   >"};
 char Pulse_Repo[] = {"NA"};
-char BloodPD1[] = {"SBP Right (mmHg)>"};
-char BloodPD2[] = {"SBP Left  (mmHg)>"};
+char BloodPD1[] =	{"SBP Right (mmHg)>"};
+char BloodPD2[] =	{"SBP Left  (mmHg)>"};
 
 int main(void)
 {
@@ -57,13 +57,15 @@ int main(void)
     USART ();
     
     /*Variables*/
-    int temp = 0;
-    int BPM= 0;						//BPM calculation
-    char LCD[3];
-    int end =0;
-    int BP1= 0;
-    int BP2= 0;
-	char adr= 0;
+	char adr= 0;					//Save address from frames
+	char temp = 0;					//Temperature measurement and calculation
+	char BPM= 0;					//BPM Calculation
+	char LCD[3];					//LCD msb to lsb bits
+	int end =0;						//stop value for LCD text
+	int BP1= 0;						//Blood pressure calculation for right arm
+	int BP2= 0;						//Blood pressure calculation for left arm
+	int BP=0;						//Difference in blood pressure
+	int test_cnt=0;					//Test counter for test alarm
 	
 	/* LCD Title Display */
 	Intro(); 
@@ -71,20 +73,28 @@ int main(void)
 	/* START MAIN */
 	for(;;)
 	{
-		UCSR0B = (1 << RXEN0);
-		adr= Check_Packet(); 
 		
+		/* The following code continuously checks to receive a specific keyword.
+		   If the keyword is received, an address is saved and directed to the 
+		   appropriate reading. The data is then analyzed and if they are found to 
+		   be within a range, a signal is sent out to the alarm station. A test
+		   alarm signal is sent out every 10 counts. 
+		*/
+		
+		UCSR0B = (1 << RXEN0);			//Enable RX
+		adr= Check_Packet();			//Check key word and save address
+	
 		/* Heart Sensor *******************************************************/
 		if (adr== BPMADDRESS)
 		{
-			BPM= Checksum_Check(adr); 
+			BPM= Checksum_Check(adr);   //Save data
 			
 			/* Convert Decimal to hex for LCD */
 			LCD[3]=0;
 			Dec_Hex(BPM, LCD);
 			
 			/* LCD temp Display */
-			i2c_start(0x50);					// Comm with LCD address
+			i2c_start(0x50);				// Comm with LCD address
 			_delay_ms(40);
 			LCD_1line(); 
 			end= 0x3E;
@@ -94,7 +104,7 @@ int main(void)
 			i2c_write(LCD[0]);
 			i2c_stop();
 			
-			if ((110<BPM) | (BPM>60))
+			if ((110<BPM) | (BPM<60))
 			{
 				_delay_ms(1);
 				Packet_Alarm(BPM, BPMADDRESS);
@@ -127,7 +137,7 @@ int main(void)
 				Packet_Alarm(temp, tempADDRESS);
 				_delay_ms(40);
 			}
-		/* Temperature *******************************************************/
+		/* Blood Presure 1 *******************************************************/
 		} else if (adr== BP1ADDRESS)
 		{
 			BP1= Checksum_Check(adr); 
@@ -147,7 +157,7 @@ int main(void)
 			i2c_write(LCD[0]);
 			i2c_stop();
 			
-		/* Temperature *******************************************************/
+		/* Blood Presure 2 *******************************************************/
 		}	else if (adr== BP2ADDRESS)
 		{
 			BP2= Checksum_Check(adr); 
@@ -166,9 +176,32 @@ int main(void)
 			i2c_write(LCD[1]);
 			i2c_write(LCD[0]); 
 			i2c_stop();
+			
+			BP= BP1-BP2;	// ex 103-113 = -10 therefor no
+			if (BP>=10)
+			{
+				_delay_ms(1);
+				Packet_Alarm(BP, BP1ADDRESS);
+				_delay_ms(40);
+			}
+			
+			BP= BP2-BP1;	// ex 113-103 = 10 therefor yes
+			if (BP>=10)
+			{
+				_delay_ms(1);
+				Packet_Alarm(BP, BP2ADDRESS);
+				_delay_ms(40);
+			}
 		}
 		/* Test *******************************************************/
-
+			test_cnt++;
+			if (test_cnt==10)
+			{
+				_delay_ms(1);
+				Packet_Alarm(0, testADDRESS);
+				_delay_ms(40);
+				test_cnt=0;
+			} 
 	}
 	return 0; 
 }
@@ -177,12 +210,11 @@ int main(void)
 //                FUNCTIONS
 //********************************************** 
 //********************************************** Decimal to Hexadecimal Conversion
-void Dec_Hex(int DEC, char HEX[])
+void Dec_Hex(char DEC, char HEX[])
 {
 	HEX[2]= DEC/100;						
 	HEX[1]= (DEC - (HEX[2]*100))/10;	
 	HEX[0]= DEC - ((HEX[2]*100) + (HEX[1]*10));
-	
 	HEX[2]+= 48;
 	HEX[1]+= 48;
 	HEX[0]+= 48;
@@ -273,20 +305,22 @@ void Lookup ( char look[], int stop )
 	{
 		ltr= look[x++];
 		i2c_write(ltr);
-		_delay_ms(10);
 	}
 	return;
 } 
-//**********************************************  USART initialize, TX and RX 
+//**********************************************  USART initialize, TX and RX
+/* In order to transmit and receiver frames to the portable and alarm 
+station,the USART on the Atmega328p needs to be initialized
+to set the appropriate BAUD rate and frame start and
+stop bits when sending data. The initialization code
+can be found on the Atmega328p data sheet.
+*/ 
 void USART (void)
 {
 	//Baud rate of 2400  (1/440us)
 	UBRR0H = 0;
 	UBRR0L = 51;
 	UCSR0A |= (1<< U2X0);
-	//UBRR0L = (unsigned char) BAUD;
-	//Enable the receiver and transmitter
-	//UCSR0B = (1 << RXEN0);
 	//Set 2 stop bits and data bit length is 8-bit
 	UCSR0C = (1 << USBS0) | (3 << UCSZ00);
      
@@ -297,7 +331,6 @@ int RX (void)
 	while  ((UCSR0A & (1 << RXC0))==0);
 	return (UDR0);
 }
-
 void TX (char TX_Data)
 {	
 	//Enable Transmitter
@@ -312,6 +345,13 @@ void TX (char TX_Data)
 }
 
 //********************************************** Frame Loop 
+/* In order to send out the data received from 
+   the sensors to the home station, the data must 
+   be inserted inside a frame that consist of 3 preambles, 
+   a keyword, an address, the data and a checksum that 
+   simple adds up the address and data. The following 
+   codes demonstrate the process of sending out data. 
+*/
 void Packet_Alarm (char data, char address)
 { 
 	char checksum=0; 
@@ -339,6 +379,9 @@ void Packet_feedback (void)
 	return;
 }
 //********************************************** Check Packet and Checksum
+/* The following code continuously checks for a keyword. 
+   If keyword is found, it saves the next byte to address. 
+*/
 char Check_Packet(void)
 {
 	char address=0; 
@@ -348,6 +391,10 @@ char Check_Packet(void)
 	
 	return address;	
 }
+/* The following code saves the data and checksum. 
+   It then checks to see if checksum if correct. 
+   If not, send out frame to notify portable station. 
+*/
 char Checksum_Check(char adr)
 {
 	char data=0;
@@ -361,13 +408,12 @@ char Checksum_Check(char adr)
 	
 	checksum_C= adr+data; 
 	
+	if (checksum_C == checksum)
+	return data;
 	//{
 	//_delay_ms(1);
 	//Packet_feedback();
 	//_delay_ms(40);
+	//} 
 		
-	//} else
-	
-	if (checksum_C == checksum)
-	return data;
 }
